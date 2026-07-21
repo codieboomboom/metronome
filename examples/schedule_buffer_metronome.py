@@ -2,10 +2,10 @@ import numpy as np
 import sounddevice as sd
 
 SAMPLING_RATE = 48_000
-BPM = 100
+BPM = 250
 CLICK_INTERVAL_IN_SAMPLES = int(round((60 * SAMPLING_RATE)/BPM))
 
-def cook_click(amplitude = 0.8, freq = 440.0, duration = 0.5, sampling_freq = 48_000):
+def cook_click(amplitude = 0.8, freq = 500.0, duration = 0.5, sampling_freq = 48_000):
     num_samples = duration * sampling_freq
     sample_indices = np.arange(num_samples)
     t = sample_indices / sampling_freq # what is time each sample was taken (secs)
