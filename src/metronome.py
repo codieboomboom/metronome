@@ -11,13 +11,7 @@ class Metronome:
             self.click = click
         else:
             # default
-            duration = 0.4
-            amplitude = 0.8
-            freq = 440.0
-            sample_indices = np.arange(sampling_rate*duration)
-            t = sample_indices / sampling_rate
-            envelope = np.exp(-60 * t)
-            self.click = amplitude * envelope * np.sin(2*np.pi*freq*t)
+            self.click = cook_click(freq = 3000, amplitude= 0.8, duration_s=0.4, decay_rate=60, sampling_freq=sampling_rate)
         # For buffering and scheduling
         self.curr_sample_pos = 0
         self.curr_click_pos = len(self.click) # previous click has been copied all into buffer/handled
@@ -56,10 +50,19 @@ class Metronome:
         self.curr_sample_pos += frames
 
 
+def cook_click(freq = 440.0, amplitude = 0.8, duration_s = 0.5, decay_rate = 0.60, sampling_freq = 48_000):
+    t = np.arange(duration_s * sampling_freq) / sampling_freq
+    envelope = np.exp(-decay_rate * t)
+    return amplitude * envelope * np.sin(2*np.pi*freq*t)
+
+
+
+
 if __name__ == "__main__":
-    bpm = 250
+    #TODO: how can I measure/guarantee that my metronome is indeed more exact than using time?
+    bpm = 100
     fs = 48_000
-    metronome = Metronome(bpm=250, sampling_rate=fs)
+    metronome = Metronome(bpm=bpm, sampling_rate=fs)
     with sd.OutputStream(channels=1, samplerate=fs,
                      dtype='float32', callback=metronome.callback):
         input("Playing... press Enter to stop\n")
