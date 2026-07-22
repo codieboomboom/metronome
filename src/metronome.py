@@ -20,16 +20,23 @@ class Metronome:
         self.bpm = bpm
         self.sampling_rate = sampling_rate
         self.interval_samples = int(sampling_rate*60/bpm)
+
+        # Initialize different clicks for different accents
         if clicks:
             self.clicks = clicks
         else:
             self.clicks = self._default_clicks()
+        self._assert_clicks(self.interval_samples)
+
+        # Determine the accents pattern based on time_signature
         if time_signature and time_signature in TIME_SIGNATURE_TO_BEATS:
             self.measure = TIME_SIGNATURE_TO_BEATS[time_signature]
         else:
             raise ValueError("Invalid time signature!")
-        # For buffering and scheduling
-        self.curr_sample_pos = 0
+
+        # absolute CLK to keep track of sample, source of truth...
+        self.sample_clk = 0
+        # Keep track of which sound (accent) that is in between the buffer
         self.active_sound = None
         self.active_sound_pos = 0
 
@@ -38,7 +45,7 @@ class Metronome:
         out = outdata[:,0]
         out.fill(0.0)
         # buffer boundaries in samples
-        b_start, b_end = self.curr_sample_pos, self.curr_sample_pos + frames
+        b_start, b_end = self.sample_clk, self.sample_clk + frames
 
         if (self.active_sound is not None and self.active_sound_pos < len(self.active_sound)):
             # decide until which index/sample of the click to copy in
@@ -50,6 +57,8 @@ class Metronome:
         # Next onset happen at a sample index which is multiples of interval(in samples) between 2 consistent beats
         # This mean, we can find ceiling of current sample index / interval as basically just add 1 to current multiple
         # We use integer division trick to calculate ceiling.
+        # ASSUMPTION 1: beat are generated constant interval from each other. I.e. there is no swing, no triplets, etc, just beats
+        # ASSUMPTION 2: approximation of interval samples to nearest int
         next_onset_sample_idx = int((b_start + self.interval_samples - 1)//self.interval_samples) * self.interval_samples
         beat_accent_idx_in_measure = (next_onset_sample_idx // self.interval_samples) % len(self.measure) # which beat in measure
         sound = self.clicks.get(self.measure[beat_accent_idx_in_measure]) # get a sine wave corresponding to the particular accent of next onset
@@ -67,14 +76,19 @@ class Metronome:
             next_onset_sample_idx += self.interval_samples
 
         # move the sample tracker forward
-        self.curr_sample_pos += frames
+        self.sample_clk += frames
 
     def _default_clicks(self):
         return {
             Accent.STRONG : cook_click(2000.0, 1, 0.05, 60, 48000),
             Accent.SUB_STRONG: cook_click(1000.0, 0.9, 0.05, 60, 48000),
             Accent.WEAK: cook_click(440.0, 0.8, 0.05, 60, 48000)
-        } 
+        }
+
+    def _assert_clicks(self, interval_samples):
+        # Guarantee the invariant that the clicks always fit inside the interval_samples
+        for _, click in self.clicks.items():
+            assert len(click) < interval_samples 
 
 
 def cook_click(freq = 440.0, amplitude = 0.8, duration_s = 0.05, decay_rate = 60, sampling_freq = 48_000):
