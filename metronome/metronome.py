@@ -40,6 +40,10 @@ class Metronome:
         self.active_sound = None
         self.active_sound_pos = 0
 
+        # Stream
+        self._stream = sd.OutputStream(channels=1, samplerate=sampling_rate,
+                     dtype='float32', callback=self.callback)
+
     def callback(self, outdata: np.ndarray, frames: int, time, status):
         # init outdata array otw undefine behaviour
         out = outdata[:,0]
@@ -90,6 +94,23 @@ class Metronome:
         for _, click in self.clicks.items():
             assert len(click) < interval_samples 
 
+    def start(self):
+        self._stream.start()
+
+    def stop(self):
+        self._stream.stop()
+
+    def close(self):
+        self._stream.close()
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, *exc):
+        self.stop()
+        self.close()
+
 
 def cook_click(freq = 440.0, amplitude = 0.8, duration_s = 0.05, decay_rate = 60, sampling_freq = 48_000):
     t = np.arange(duration_s * sampling_freq) / sampling_freq
@@ -101,6 +122,5 @@ if __name__ == "__main__":
     bpm = 100
     fs = 48_000
     metronome = Metronome(bpm=bpm, sampling_rate=fs, time_signature=(3,4))
-    with sd.OutputStream(channels=1, samplerate=fs,
-                     dtype='float32', callback=metronome.callback):
+    with metronome as m:
         input("Playing... press Enter to stop\n")
