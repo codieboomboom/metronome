@@ -2,6 +2,7 @@
 import numpy as np
 import sounddevice as sd
 from enum import IntEnum
+from dataclasses import dataclass
 
 class Accent(IntEnum):
     REST = 0
@@ -14,6 +15,29 @@ TIME_SIGNATURE_TO_BEATS = {
     (3, 4): [Accent.STRONG, Accent.WEAK, Accent.WEAK],
     (6, 8): [Accent.STRONG, Accent.WEAK, Accent.WEAK, Accent.SUB_STRONG, Accent.WEAK, Accent.WEAK ]
 }
+
+class ConfigError(Exception):
+    """Raise for any problems during configuration loading"""
+
+@dataclass
+class Config(frozen=True):
+    bpm: int
+    sampling_rate: int
+    time_signature: tuple[int, int]
+    clicks: dict[str, dict]
+
+    def __post_init__(self)->None:
+        if not isinstance(self.bpm, int) or not (20 <= self.bpm <= 300):
+            raise ConfigError(f"BPM must be an integer and between 20-300 BPM. Recieved bpm: {self.bpm}")
+        allowed_fs = [44_100, 48_000]
+        if not isinstance(self.sampling_rate, int) or self.sampling_rate not in allowed_fs:
+            raise ConfigError(f"Sampling Rate must be an int and falls inside these values: {allowed_fs}. Value received: {self.sampling_rate}")
+        #TODO: validate time_signature to be of 2 int
+        if not isinstance(self.time_signature, tuple):
+            raise ConfigError(f"Time signature must be in the form of a tuple with integers. Received non-tuple {self.time_signature}")
+        if not isinstance(self.time_signature[0], int) or not isinstance(self.time_signature[1], int):
+            raise ConfigError(f"Time signature must be a tuple of integer, received a tuple of ({type(self.time_signature[0])}, {type(self.time_signature[1])})")
+        #TODO: validate the clicks frequency to be within Nyquist theorem
 
 class Metronome:
     def __init__(self, bpm=120, sampling_rate = 48_000, clicks: dict = None, time_signature: tuple[int, int] = (4,4)):
