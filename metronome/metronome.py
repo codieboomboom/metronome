@@ -23,7 +23,6 @@ class Metronome:
         
         # Initialize different clicks for different accents
         self.accents_to_clicks = self.build_clicks_from_spec(cfg.clicks)
-        self._assert_clicks()
         # Determine the accents pattern based on time_signature
         if cfg.time_signature in TIME_SIGNATURE_TO_BEATS:
             self.measure = TIME_SIGNATURE_TO_BEATS[cfg.time_signature]
@@ -68,8 +67,6 @@ class Metronome:
             offset_onset_start = next_onset_sample_idx - b_start
             samples_to_copy = min(frames - offset_onset_start, len(sound))
             out[offset_onset_start:offset_onset_start+samples_to_copy] = sound[:samples_to_copy]
-            #TODO: Can we guarantee that if samples_to_copy is not whole of click, the next_onset_sample_idx won't happen in 
-            # this buffer iteration also (i.e no overlap)
             self.active_sound = sound
             self.active_sound_pos = samples_to_copy
             # update to next planned onset, if it is still within current buffer, loop will handle it
@@ -87,11 +84,6 @@ class Metronome:
             Accent.SUB_STRONG: cook_click(freq=sub_strong_spec["frequency"],amplitude=sub_strong_spec["amplitude"], duration_s=sub_strong_spec["duration"], decay_rate=sub_strong_spec["decay"], sampling_freq=self.cfg.sampling_rate),
             Accent.WEAK: cook_click(freq=weak_spec["frequency"],amplitude=weak_spec["amplitude"], duration_s=weak_spec["duration"], decay_rate=weak_spec["decay"], sampling_freq=self.cfg.sampling_rate),
         }
-
-    def _assert_clicks(self):
-        # Guarantee the invariant that the clicks always fit inside the interval_samples
-        for _, click in self.accents_to_clicks.items():
-            assert len(click) < self.interval_samples 
 
     def start(self):
         self._stream.start()

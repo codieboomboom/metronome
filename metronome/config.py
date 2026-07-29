@@ -26,6 +26,8 @@ DEFAULT_CONFIG = {
     }
 }
 
+ACCENTS = ["strong", "sub_strong", "weak"]
+
 class ConfigError(Exception):
     """Raise for any problems during configuration loading"""
 
@@ -42,12 +44,22 @@ class Config:
         allowed_fs = [44_100, 48_000]
         if not isinstance(self.sampling_rate, int) or self.sampling_rate not in allowed_fs:
             raise ConfigError(f"Sampling Rate must be an int and falls inside these values: {allowed_fs}. Value received: {self.sampling_rate}")
-        #TODO: validate time_signature to be of 2 int
         if not isinstance(self.time_signature, tuple):
             raise ConfigError(f"Time signature must be in the form of a tuple with integers. Received non-tuple {self.time_signature}")
         if not isinstance(self.time_signature[0], int) or not isinstance(self.time_signature[1], int):
             raise ConfigError(f"Time signature must be a tuple of integer, received a tuple of ({type(self.time_signature[0])}, {type(self.time_signature[1])})")
-        #TODO: validate the clicks frequency to be within Nyquist theorem
+        # Some validations for clicks:
+        if not self.clicks:
+            raise ConfigError(f"Clicks specification must be a dictionary! Received {type(self.clicks)}")
+        if self.clicks.keys() != set(ACCENTS):
+            raise ConfigError(f"You must supply 1 entry of specification for each type of accents in {ACCENTS}. There are only entries for {self.click.keys()} ")
+        # TODO: Add a bunch more validation for fields of the dict: abit mafan to type them out here...
+        beat_interval = 60 / self.bpm
+        for click_accent, click_spec in self.clicks.items():
+            if click_spec["duration"] > beat_interval:
+                raise ConfigError(f"Click {click_accent} has duration {click_spec['duration']} longer than interval between 2 beats!")
+            if click_spec["frequency"] * 2 > self.sampling_rate:
+                raise ConfigError(f"Click {click_accent} has frequency {click_spec['frequency']} that may cause aliasing for sampling rate {self.sampling_rate}")
 
 def load_config() -> Config:
     final_config = DEFAULT_CONFIG
