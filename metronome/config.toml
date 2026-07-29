@@ -1,0 +1,26 @@
+bpm = 100
+sampling_rate = 48000
+
+# The time signature is defined using top / bottom number
+# For e.g. a 4/4 time signature is consisted of top = 4 and bottom = 4
+[time_signature]
+top = 4
+bottom = 4
+
+[clicks.strong]
+amplitude = 1.0
+frequency = 1500.0
+duration = 0.5
+decay = 60
+
+[clicks.sub_strong]
+amplitude = 0.8
+frequency = 1000.0
+duration = 0.5
+decay = 60
+
+[clicks.weak]
+amplitude = 0.6
+frequency = 440.0
+duration = 0.5
+decay = 60

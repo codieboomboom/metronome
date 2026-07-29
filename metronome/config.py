@@ -3,7 +3,10 @@ from dataclasses import dataclass
 DEFAULT_CONFIG = {
     "bpm": 120,
     "sampling_rate": 48_000,
-    "time_signature": (4,4),
+    "time_signature": {
+        "top": 4,
+        "bottom": 4
+    },
     "clicks": {
         "strong": {
             "amplitude": 1,
@@ -63,4 +66,5 @@ class Config:
 
 def load_config() -> Config:
     final_config = DEFAULT_CONFIG
-    return Config(bpm=final_config["bpm"], sampling_rate=final_config["sampling_rate"], time_signature=final_config["time_signature"], clicks=final_config["clicks"])
+    time_signature = (final_config["time_signature"]["top"], final_config["time_signature"]["bottom"])
+    return Config(bpm=final_config["bpm"], sampling_rate=final_config["sampling_rate"], time_signature=time_signature, clicks=final_config["clicks"])
