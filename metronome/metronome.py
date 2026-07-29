@@ -16,11 +16,37 @@ TIME_SIGNATURE_TO_BEATS = {
     (6, 8): [Accent.STRONG, Accent.WEAK, Accent.WEAK, Accent.SUB_STRONG, Accent.WEAK, Accent.WEAK ]
 }
 
+DEFAULT_CONFIG = {
+    "bpm": 120,
+    "sampling_rate": 48_000,
+    "time_signature": (4,4),
+    "clicks": {
+        "strong": {
+            "amplitude": 1,
+            "frequency": 1500,
+            "duration": 0.05,
+            "decay": 60
+        },
+        "sub_strong": {
+            "amplitude": 0.8,
+            "frequency": 1000,
+            "duration": 0.05,
+            "decay": 60
+        },
+        "weak": {
+            "amplitude": 0.5,
+            "frequency": 440,
+            "duration": 0.05,
+            "decay": 60
+        },
+    }
+}
+
 class ConfigError(Exception):
     """Raise for any problems during configuration loading"""
 
-@dataclass
-class Config(frozen=True):
+@dataclass(frozen=True)
+class Config:
     bpm: int
     sampling_rate: int
     time_signature: tuple[int, int]
@@ -39,24 +65,23 @@ class Config(frozen=True):
             raise ConfigError(f"Time signature must be a tuple of integer, received a tuple of ({type(self.time_signature[0])}, {type(self.time_signature[1])})")
         #TODO: validate the clicks frequency to be within Nyquist theorem
 
+def load_config() -> Config:
+    final_config = DEFAULT_CONFIG
+    return Config(bpm=final_config["bpm"], sampling_rate=final_config["sampling_rate"], time_signature=final_config["time_signature"], clicks=final_config["clicks"])
+
 class Metronome:
-    def __init__(self, bpm=120, sampling_rate = 48_000, clicks: dict = None, time_signature: tuple[int, int] = (4,4)):
-        self.bpm = bpm
-        self.sampling_rate = sampling_rate
-        self.interval_samples = int(sampling_rate*60/bpm)
-
+    def __init__(self, cfg: Config):
+        self.cfg = cfg
+        self.interval_samples = int(cfg.sampling_rate*60/cfg.bpm)
+        
         # Initialize different clicks for different accents
-        if clicks:
-            self.clicks = clicks
-        else:
-            self.clicks = self._default_clicks()
-        self._assert_clicks(self.interval_samples)
-
+        self.accents_to_clicks = self.build_clicks_from_spec(cfg.clicks)
+        self._assert_clicks()
         # Determine the accents pattern based on time_signature
-        if time_signature and time_signature in TIME_SIGNATURE_TO_BEATS:
-            self.measure = TIME_SIGNATURE_TO_BEATS[time_signature]
+        if cfg.time_signature in TIME_SIGNATURE_TO_BEATS:
+            self.measure = TIME_SIGNATURE_TO_BEATS[cfg.time_signature]
         else:
-            raise ValueError("Invalid time signature!")
+            raise ValueError(f"Not supported time signature: {cfg.time_signature}")
 
         # absolute CLK to keep track of sample, source of truth...
         self.sample_clk = 0
@@ -65,7 +90,7 @@ class Metronome:
         self.active_sound_pos = 0
 
         # Stream
-        self._stream = sd.OutputStream(channels=1, samplerate=sampling_rate,
+        self._stream = sd.OutputStream(channels=1, samplerate=cfg.sampling_rate,
                      dtype='float32', callback=self.callback)
 
     def callback(self, outdata: np.ndarray, frames: int, time, status):
@@ -89,7 +114,7 @@ class Metronome:
         # ASSUMPTION 2: approximation of interval samples to nearest int
         next_onset_sample_idx = int((b_start + self.interval_samples - 1)//self.interval_samples) * self.interval_samples
         beat_accent_idx_in_measure = (next_onset_sample_idx // self.interval_samples) % len(self.measure) # which beat in measure
-        sound = self.clicks.get(self.measure[beat_accent_idx_in_measure]) # get a sine wave corresponding to the particular accent of next onset
+        sound = self.accents_to_clicks.get(self.measure[beat_accent_idx_in_measure]) # get a sine wave corresponding to the particular accent of next onset
         while next_onset_sample_idx < b_end:
             # Find offset from buffer start to copy the click in, and also find how much samples to copy in
             # we take either the remaining buffer (if click is longer than buffer) or copy the whole click (if click is smaller than remaining buffer space)
@@ -106,17 +131,20 @@ class Metronome:
         # move the sample tracker forward
         self.sample_clk += frames
 
-    def _default_clicks(self):
+    def build_clicks_from_spec(self, click_specs: dict[str, dict]):
+        strong_spec = click_specs["strong"]
+        sub_strong_spec = click_specs["sub_strong"]
+        weak_spec = click_specs["weak"]
         return {
-            Accent.STRONG : cook_click(2000.0, 1, 0.05, 60, 48000),
-            Accent.SUB_STRONG: cook_click(1000.0, 0.9, 0.05, 60, 48000),
-            Accent.WEAK: cook_click(440.0, 0.8, 0.05, 60, 48000)
+            Accent.STRONG : cook_click(freq=strong_spec["frequency"],amplitude=strong_spec["amplitude"], duration_s=strong_spec["duration"], decay_rate=strong_spec["decay"], sampling_freq=self.cfg.sampling_rate),
+            Accent.SUB_STRONG: cook_click(freq=sub_strong_spec["frequency"],amplitude=sub_strong_spec["amplitude"], duration_s=sub_strong_spec["duration"], decay_rate=sub_strong_spec["decay"], sampling_freq=self.cfg.sampling_rate),
+            Accent.WEAK: cook_click(freq=weak_spec["frequency"],amplitude=weak_spec["amplitude"], duration_s=weak_spec["duration"], decay_rate=weak_spec["decay"], sampling_freq=self.cfg.sampling_rate),
         }
 
-    def _assert_clicks(self, interval_samples):
+    def _assert_clicks(self):
         # Guarantee the invariant that the clicks always fit inside the interval_samples
-        for _, click in self.clicks.items():
-            assert len(click) < interval_samples 
+        for _, click in self.accents_to_clicks.items():
+            assert len(click) < self.interval_samples 
 
     def start(self):
         self._stream.start()

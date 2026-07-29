@@ -1,1 +1,1 @@
-from .metronome import Metronome
+from .metronome import Metronome, load_config
