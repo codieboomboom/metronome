@@ -1,4 +1,6 @@
 from dataclasses import dataclass
+from pathlib import Path
+import tomllib
 
 DEFAULT_CONFIG = {
     "bpm": 120,
@@ -28,6 +30,8 @@ DEFAULT_CONFIG = {
         },
     }
 }
+
+DEFAULT_TOML_PATH = Path(__file__).resolve().parent.joinpath("config.toml")
 
 ACCENTS = ["strong", "sub_strong", "weak"]
 
@@ -64,7 +68,28 @@ class Config:
             if click_spec["frequency"] * 2 > self.sampling_rate:
                 raise ConfigError(f"Click {click_accent} has frequency {click_spec['frequency']} that may cause aliasing for sampling rate {self.sampling_rate}")
 
+
+def load_toml(path: Path, *, required: bool) -> dict:
+    if not path.is_file():
+        if required:
+            raise ConfigError(f"Config file {path} not found!")
+        return {} 
+    
+    try:
+        with path.open("rb") as f:
+            toml_cfg = tomllib.load(f)
+    except tomllib.TOMLDecodeError as e:
+        raise ConfigError(f"Invalid toml in {path}") from e
+    
+    # TODO: Validate if the read-in config dict have any extra/unknown fields/keys
+
+    return toml_cfg
+
+
 def load_config() -> Config:
     final_config = DEFAULT_CONFIG
+    
+    toml_layer = load_toml(DEFAULT_TOML_PATH, required=True)
+
     time_signature = (final_config["time_signature"]["top"], final_config["time_signature"]["bottom"])
     return Config(bpm=final_config["bpm"], sampling_rate=final_config["sampling_rate"], time_signature=time_signature, clicks=final_config["clicks"])
