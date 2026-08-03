@@ -81,9 +81,34 @@ def load_toml(path: Path, *, required: bool) -> dict:
     except tomllib.TOMLDecodeError as e:
         raise ConfigError(f"Invalid toml in {path}") from e
     
-    # TODO: Validate if the read-in config dict have any extra/unknown fields/keys
-
+    validate_no_unknown_keys(toml_cfg, DEFAULT_CONFIG, str(path))
     return toml_cfg
+
+def validate_no_unknown_keys(data: dict, ref: dict, src_name: str, prefix: str = "") -> None:
+    """Validate that there are no unknown keys inside that data that does not appear/show up in the reference dict.
+    Also make sure nested structure matched
+
+    Args:
+        data (dict): dictionary that we wish to validates
+        ref (dict): reference dictionary containing "allowed"/"whitelisted" keys.
+        src_name (str): name of the data source, i.e. from which config file path, from cli, etc => for debugging purpose
+        prefix (str, optional): representing the parent node/nested level where the keys we are validating be at. Defaults to "".
+
+    Raises:
+        ConfigError: should a key in data does not exist in ref or the key shouldn't be a dict.
+    """
+    for key, value in data.items():
+        curr_path = f"{prefix}{key}" # from root level
+        if key not in ref.keys():
+            raise ConfigError(f"The key {curr_path!r} in {src_name} does not exist in reference config")
+        if isinstance(value, dict):
+            # validates if such nested structure / same key is a dict in ref?
+            if not isinstance(ref.get(key, None), dict):
+                raise ConfigError(f"They key {curr_path!r} in {src_name} shouldn't be a dictionary according to reference config!")
+            # curr key's value is a dictionary, thus we need to check the equivalent nested structure
+            # in reference
+            validate_no_unknown_keys(data[key], ref[key], src_name, prefix=f"{curr_path}.")
+
 
 
 def load_config() -> Config:
