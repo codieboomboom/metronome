@@ -109,12 +109,37 @@ def validate_no_unknown_keys(data: dict, ref: dict, src_name: str, prefix: str =
             # in reference
             validate_no_unknown_keys(data[key], ref[key], src_name, prefix=f"{curr_path}.")
 
+def merge_layer_into_cfg(target: dict, layer: dict, active_layer_tracker: dict, src_name: str, prefix: str = "") -> None:
+    """Deeply merge nested structure of layer into target and also updates if changes has happen due this layer/src_name. Recursive call
+    to make deep merge happens
+
+    Args:
+        target (dict): the destination dictionary to merge into
+        layer (dict): the source destination to copy into target
+        active_layer_tracker (dict): a dictionary of key being the config key being changed/replaced and value is the name of layer/ active layer
+        that cause that changed. I.e name of src where the config key's value is from
+        src_name (str): representative name of the current layer being merged into target
+        prefix (str, optional): Use to build key path, dotted-separated to represent a path from root to the current key. Defaults to "".
+    """
+    for cfg_key, cfg_value in layer.items():
+        curr_path = f"{prefix}{cfg_key}" # from root level to this cfg_key
+        if isinstance(cfg_value, dict) and isinstance(target.get(cfg_key, None), dict):
+            # Proceed to merge on the next layer recursively
+            merge_layer_into_cfg(target[cfg_key], cfg_value, active_layer_tracker, src_name, prefix=f"{curr_path}.")
+        else:
+            # just replace value and keep track of replacement/changes overwritten by active layer
+            target[cfg_key] = cfg_value
+            active_layer_tracker[curr_path] = src_name
 
 
 def load_config() -> Config:
-    final_config = DEFAULT_CONFIG
+    final_config = {}
+    cfg_active_layer = {}
+
+    merge_layer_into_cfg(final_config, DEFAULT_CONFIG, cfg_active_layer, "built-in defaults")
     
     toml_layer = load_toml(DEFAULT_TOML_PATH, required=True)
+    merge_layer_into_cfg(final_config, toml_layer, cfg_active_layer, DEFAULT_TOML_PATH)
 
     time_signature = (final_config["time_signature"]["top"], final_config["time_signature"]["bottom"])
     return Config(bpm=final_config["bpm"], sampling_rate=final_config["sampling_rate"], time_signature=time_signature, clicks=final_config["clicks"])
